@@ -1,0 +1,193 @@
+from decimal import FloatOperation
+import sys
+import csv
+import json
+import datetime
+import time
+from csv import reader
+from tokenize import Double, Floatnumber
+from datetime import datetime, timedelta
+from dateutil.tz import tzutc, tzlocal
+import pandas as pd
+
+
+def getRouterInfo(input,filterType):
+    Rdic = [
+            {
+            "index":1,
+            "address": "fd11::100",
+            "file": "N1.csv",
+            "type":"e"
+            }
+            ,{
+            "index":2,
+            "address": "fd22::100",
+            "file": "N2.csv",
+            "type":"m"
+            }
+            ,{
+            "index":3,   
+            "address": "fd33::100",
+            "file": "N3.csv",
+            "type":"m"
+            }
+            ,{
+            "index":4,
+            "address": "fd44::100",
+            "file": "N4.csv",
+            "type":"m"
+            }
+            ,{
+            "index":5,
+            "address": "fd55::100",
+            "file": "N5.csv",
+            "type":"m"
+            }
+            ,{
+            "index":6,
+            "address": "fd66::100",
+            "file": "N6.csv",
+            "type":"e"
+            }
+            ,{
+            "index":6,
+            "address": "fd66::106",
+            "file": "N6.csv",
+            "type":"e"
+            }
+        ]
+    if filterType == "index":
+        for x in Rdic:
+            if x['index']==input:
+                return (x)
+    elif filterType == "ip":
+        for x in Rdic:
+            if x['address']==input:
+                return (x) 
+        
+def filterPackets(data,routerIndex):
+    filteredList=[]
+    for a in data:
+        routerInfo=getRouterInfo(a[1],'ip')
+        if routerInfo['address'] == routerIndex:
+            filteredList.append(a)
+    return filteredList
+        
+startDate =sys.argv[1]
+startTime =sys.argv[2]
+
+endDate =sys.argv[3]
+endTime =sys.argv[4]
+
+DelayList=[]
+tempList=[]
+N1Temp=[]
+N2Temp=[]
+N3Temp=[]
+N4Temp=[]
+N5Temp=[]
+N6Temp=[]
+N6Temp2=[]
+
+destList = ['fd11::100','fd22::100','fd33::100','fd44::100','fd55::100','fd66::100','fd66::106']
+
+
+epoch1970 = datetime(1970, 1, 1, 0, 0, 0, tzinfo=tzutc())
+
+startepochutc = int((datetime.strptime(startDate + ' ' + startTime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tzutc()) - epoch1970).total_seconds())
+endepochutc = int((datetime.strptime(endDate + ' ' + endTime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=tzutc()) - epoch1970).total_seconds())
+
+for x in range(1,7):
+    inputRouterInfo = getRouterInfo(x,"index")
+    with open(inputRouterInfo['file'], 'r') as input_file:
+        csv_reader = reader(input_file)
+        for row in csv_reader:
+            if float(row[2]) >= startepochutc and float(row[2]) <= endepochutc:
+                nextHopInfo = getRouterInfo(row[1],"ip")
+                srcAddress = row[0]
+                inputPacketTime =  float(row[2])
+                tempList.append(row)
+                if(x==1):
+                    N1Temp.append(row)
+                elif(x==2):
+                    N2Temp.append(row) 
+                elif(x==3):
+                    N3Temp.append(row) 
+                elif(x==4):
+                    N4Temp.append(row) 
+                elif(x==5):
+                    N5Temp.append(row) 
+                elif(x==6):
+                    N6Temp.append(row)    
+                elif(x==7):
+                    N6Temp2.append(row) 
+                    
+            
+            elif float(row[2]) > endepochutc:
+                    break
+                
+    
+for x in range(1,6):
+        inputRouterInfo = getRouterInfo(x,"index")
+        if(x==1):
+            datas=N1Temp
+        elif(x==2):
+            datas=N2Temp
+        elif(x==3):
+            datas=N3Temp
+        elif(x==4):
+            datas=N4Temp
+        elif(x==5):
+            datas=N5Temp
+        elif(x==6):
+            datas=N6Temp
+        # elif(x==7):
+        #     datas=N7Temp
+
+        for row in (datas):
+                nextHopInfo = getRouterInfo(row[1],"ip")
+                srcAddress = row[0]
+                inputPacketTime =  float(row[2])
+                # if(row[1]=="fd11::100"):
+                #     nextHopDatas=N1Temp
+                if(row[1]=="fd22::100"):
+                    nextHopDatas=N2Temp
+                elif(row[1]=="fd33::100"):
+                    nextHopDatas=N3Temp
+                elif(row[1]=="fd44::100"):
+                    nextHopDatas=N4Temp
+                elif(row[1]=="fd55::100"):
+                    nextHopDatas=N5Temp
+                elif(row[1]=="fd66::100" or row[1]=="fd66::106"):
+                    nextHopDatas=N6Temp
+                flag2=0
+                for row2 in nextHopDatas:
+                        # print (row2)
+                        if float(row2[2]) >= startepochutc and float(row2[2]) <= endepochutc:
+                            if row[0] == row2[0] :
+                                flag2 = flag2 + 1
+                                if (flag2==2) and (inputRouterInfo['index'] != nextHopInfo['index']) and (nextHopInfo['index'] < 6 and (inputRouterInfo['index'] < nextHopInfo['index'])):
+                                    outputPacketTime = float(row2[2])
+                                    delay = float(outputPacketTime)-float(inputPacketTime)
+                                    temp={
+                                        "Peers":"R"+str(inputRouterInfo['index'])+"-R"+str(nextHopInfo['index']),
+                                        "Delay": delay
+                                        }
+                                    DelayList.append(temp)
+                                    print("Delay is %s for source '%s', between R%s-R%s , startTime: '%s' , endTime: '%s'" %(delay ,srcAddress,inputRouterInfo['index'], nextHopInfo['index'],float(outputPacketTime),float(inputPacketTime)))
+                                    break
+                                elif (flag2==1) and (inputRouterInfo['index'] != nextHopInfo['index']) and (nextHopInfo['index'] == 6):
+                                    outputPacketTime = float(row2[2])
+                                    delay = float(outputPacketTime)-float(inputPacketTime)
+                                    temp={
+                                        "Peers":"R"+str(inputRouterInfo['index'])+"-R"+str(nextHopInfo['index']),
+                                        "Delay": delay
+                                        }
+                                    DelayList.append(temp)
+                                    print("Delay is %s for source '%s', between R%s-R%s , startTime: '%s' , endTime: '%s'" %(delay ,srcAddress,inputRouterInfo['index'], nextHopInfo['index'],float(outputPacketTime),float(inputPacketTime)))
+                                    break
+                        elif float(row2[2]) > endepochutc:
+                            break                   
+                        
+df = pd.DataFrame(DelayList)
+print (df.groupby('Peers').mean())
